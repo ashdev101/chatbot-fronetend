@@ -1,0 +1,65 @@
+/* CSS Variables */
+:root {
+  /* Colors - Modern vibrant theme */
+  --primary-gradient-start: #6366f1;
+  --primary-gradient-end: #ec4899;
+  --accent-color: #14b8a6;
+  --error-color: #f43f5e;
+  --success-color: #22c55e;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --border-color: #e2e8f0;
+  --bot-message-bg: #f8fafc;
+  --user-message-gradient-start: #6366f1;
+  --user-message-gradient-end: #a855f7;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-2xl: 24px;
+  --spacing-3xl: 40px;
+
+  /* Typography */
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 1.1em;
+  --font-size-xl: 2.5em;
+
+  /* Chatbot Dimensions */
+  --chatbot-icon-size: 60px;
+  --chatbot-window-width: 520px;
+  --chatbot-window-height: 700px;
+  --chatbot-avatar-size: 40px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(99, 102, 241, 0.3),
+    0 2px 4px -1px rgba(236, 72, 153, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  /* Transitions */
+  --transition-fast: 0.2s ease;
+  --transition-base: 0.3s ease;
+  --transition-slow: 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+  --radius-full: 50%;
+}
