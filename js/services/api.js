@@ -5,7 +5,7 @@ import { CONFIG } from "../config/config.js";
  */
 export function getUserEmail() {
   try {
-    return "ashish.upadhyay@tataplay.com"
+    return "Shayanta.Chaudhuri@tataplay.com";
     // return localStorage.getItem(CONFIG.EMAIL_STORAGE_KEY);
   } catch (e) {
     console.error("Failed to get user email:", e);
@@ -74,7 +74,7 @@ const MOCK_RESPONSES = {
  */
 async function callMockAPI(email, query) {
   // Simulate network delay
-  await new Promise((resolve) => 
+  await new Promise((resolve) =>
     setTimeout(resolve, Math.random() * 1000 + 500)
   );
 
@@ -98,9 +98,9 @@ async function callMockAPI(email, query) {
 
   // Return random response from selected category
   const response = responses[Math.floor(Math.random() * responses.length)];
-  
+
   console.log(`[MOCK API] Query: "${query}" | Response: "${response}"`);
-  
+
   return response;
 }
 
@@ -109,128 +109,148 @@ async function callMockAPI(email, query) {
  */
 
 function getCookie(name) {
-  console.log("coookies",document.cookie);
-  return document.cookie
-    .split("; ")
-    .find(row => row.startsWith(name + "="))
-    ?.split("=")[1];
+  const cookies = document.cookie ? document.cookie.split("; ") : [];
+
+  for (const cookie of cookies) {
+    const [key, ...rest] = cookie.split("=");
+    if (key === name) {
+      return decodeURIComponent(rest.join("="));
+    }
+  }
+  return null;
 }
 
-
-let initDone = false;
+let initPromise = null;
+let csrfToken = null;
 
 async function initSecurityContext() {
-  if (initDone) return;
+  if (csrfToken) return;
 
-  await fetch(`${CONFIG.API_ENDPOINT}/api/init`, {
-    method: "GET",
-    credentials: "include"
-  });
+  if (!initPromise) {
+    initPromise = (async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
 
-  initDone = true;
+      try {
+        const response = await fetch(`${CONFIG.API_ENDPOINT}/api/init`, {
+          method: "GET",
+          credentials: "include",
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Init failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (!data || typeof data.token !== "string") {
+          throw new Error("Invalid CSRF init response");
+        }
+
+        csrfToken = data.token;
+      } finally {
+        clearTimeout(timeout);
+        initPromise = null;
+      }
+    })();
+  }
+
+  return initPromise;
 }
 
-
-async function callLambdaAPI(email, query, responseType = "DOCUMENT") {
+async function callLambdaAPI(email, query, retry = true) {
   try {
-    // 1️⃣ Ensure security context exists
     await initSecurityContext();
 
-    // 2️⃣ Read CSRF token
-    const csrfToken = getCookie("csrf_token");
     if (!csrfToken) {
-      throw new Error("Security validation failed. Please refresh the page.");
+      throw new Error("Security context not initialized");
     }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120_000); // 2 minutes
 
     const response = await fetch(`${CONFIG.API_ENDPOINT}/api/secure-query`, {
       method: "POST",
-      mode: "cors",
-      credentials: "include", // 🔑 REQUIRED
+      credentials: "include",
+      signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
-        "Accept": "application/json",
-        "X-CSRF-Token": csrfToken // 🔐 REQUIRED
+        Accept: "*/*", // IMPORTANT: allow file responses
+        "X-CSRF-Token": csrfToken,
       },
       body: JSON.stringify({
         email,
-        query,
-        response_type: responseType,
+        text: query,
       }),
     });
 
-    // --- Existing UX-safe error handling ---
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`API error (${response.status}):`, errorText);
+    clearTimeout(timeout);
 
-      if (response.status === 403) {
-        throw new Error("Your session is not authorized. Please refresh the page.");
-      } else if (response.status === 400) {
-        throw new Error("Invalid request. Please try again.");
-      } else if (response.status === 500) {
-        throw new Error("Server error. Please try again later.");
+    if (!response.ok) {
+      const text = await response.text();
+
+      // 🔐 Retry ONLY once and ONLY for CSRF failures
+      if (response.status === 403 && retry && text.includes("CSRF")) {
+        csrfToken = null;
+        return callLambdaAPI(email, query, false);
       }
 
-      throw new Error(`API error: ${response.status}`);
+      throw new Error(`API error ${response.status}: ${text}`);
     }
 
+    // 🔍 Detect response type
+    const contentType = response.headers.get("content-type") || "";
+
+    // ===============================
+    // 📄 FILE RESPONSE
+    // ===============================
+    if (!contentType.includes("application/json")) {
+      const blob = await response.blob();
+
+      // Try to extract filename
+      let filename = "download";
+      const disposition = response.headers.get("content-disposition");
+
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      return "File downloaded successfully";
+    }
+
+    // ===============================
+    // 📝 TEXT RESPONSE
+    // ===============================
     const data = await response.json();
 
-    if (data.status === "error") {
-      throw new Error(data.message || "An error occurred");
-    }
-
-    if (data.status === "denied") {
-      throw new Error("Access denied.");
-    }
-
-    if (data.body) {
-      try {
-        const bodyData =
-          typeof data.body === "string" ? JSON.parse(data.body) : data.body;
-
-        if (bodyData.status === "error") {
-          throw new Error(bodyData.message || "An error occurred");
-        }
-
-        return (
-          bodyData.response ||
-          bodyData.message ||
-          bodyData.answer ||
-          "I received your query but couldn't generate a response."
-        );
-      } catch {
-        return data.body;
-      }
-    }
-
-    return (
-      data.response ||
-      data.message ||
-      data.answer ||
-      data.text ||
-      "I received your query but couldn't generate a response."
-    );
+    return data.final_output || data.response || data.message || "No response";
   } catch (error) {
-    console.error("Lambda API call failed:", error);
-
-    if (error.message.includes("Failed to fetch")) {
-      throw new Error(
-        "Unable to connect to the server. Please check your connection."
-      );
+    if (error.name === "AbortError") {
+      throw new Error("Request timed out. Please try again.");
     }
-
     throw error;
   }
 }
-
 
 /**
  * Get bot response - main entry point
  */
 export async function getBotResponse(message, conversationHistory = []) {
   const email = getUserEmail();
-  
+
   if (!email) {
     throw new Error("Email not found. Please provide your email address.");
   }

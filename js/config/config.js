@@ -6,7 +6,7 @@ export const CONFIG = {
 
   // API Configuration
   USE_MOCK_API: false, // Set to false to use real Lambda API
-  API_ENDPOINT: "https://tplay-api.kreedatesting.in",
+  API_ENDPOINT: "http://localhost:8000",
   
   // Streaming Configuration
   STREAMING_DELAY_MIN: 50,
