@@ -1,0 +1,8 @@
+server.js
+node_modules
+.env
+.DS_Store
+package-lock.json
+package.json
+bun.lockb
+bun.lock

@@ -1,21 +1,14 @@
 import { CONFIG } from "../config/config.js";
 
-/**
- * Get user email from localStorage
- */
 export function getUserEmail() {
   try {
     return "Shayanta.Chaudhuri@tataplay.com";
-    // return localStorage.getItem(CONFIG.EMAIL_STORAGE_KEY);
   } catch (e) {
     console.error("Failed to get user email:", e);
     return null;
   }
 }
 
-/**
- * Save user email to localStorage
- */
 export function saveUserEmail(email) {
   try {
     localStorage.setItem(CONFIG.EMAIL_STORAGE_KEY, email);
@@ -26,17 +19,11 @@ export function saveUserEmail(email) {
   }
 }
 
-/**
- * Validate email format
- */
 export function isValidEmail(email) {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 }
 
-/**
- * Mock API responses for testing
- */
 const MOCK_RESPONSES = {
   greeting: [
     "Hello! I'm Stella, your AI assistant. How can I help you today?",
@@ -69,11 +56,7 @@ const MOCK_RESPONSES = {
   ],
 };
 
-/**
- * Generate mock API response with simulated delay
- */
 async function callMockAPI(email, query) {
-  // Simulate network delay
   await new Promise((resolve) =>
     setTimeout(resolve, Math.random() * 1000 + 500)
   );
@@ -81,7 +64,6 @@ async function callMockAPI(email, query) {
   const queryLower = query.toLowerCase();
   let responses;
 
-  // Match query to appropriate response category
   if (queryLower.match(/hello|hi|hey|greet/)) {
     responses = MOCK_RESPONSES.greeting;
   } else if (queryLower.match(/help|assist|support/)) {
@@ -96,17 +78,12 @@ async function callMockAPI(email, query) {
     responses = MOCK_RESPONSES.default;
   }
 
-  // Return random response from selected category
   const response = responses[Math.floor(Math.random() * responses.length)];
 
   console.log(`[MOCK API] Query: "${query}" | Response: "${response}"`);
 
   return response;
 }
-
-/**
- * Call AWS Lambda API
- */
 
 function getCookie(name) {
   const cookies = document.cookie ? document.cookie.split("; ") : [];
@@ -129,7 +106,7 @@ async function initSecurityContext() {
   if (!initPromise) {
     initPromise = (async () => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
+      const timeout = setTimeout(() => controller.abort(), 30_000);
 
       try {
         const response = await fetch(`${CONFIG.API_ENDPOINT}/api/init`, {
@@ -149,6 +126,11 @@ async function initSecurityContext() {
         }
 
         csrfToken = data.token;
+      } catch (error) {
+        if (error.name === "TypeError" && error.message.includes("Failed to fetch")) {
+          throw new Error("CORS_ERROR: The API server is not allowing requests from this origin. Please configure CORS headers on the backend API.");
+        }
+        throw error;
       } finally {
         clearTimeout(timeout);
         initPromise = null;
@@ -168,7 +150,7 @@ async function callLambdaAPI(email, query, retry = true) {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120_000); // 2 minutes
+    const timeout = setTimeout(() => controller.abort(), 1_800_000); // 30 minutes
 
     const response = await fetch(`${CONFIG.API_ENDPOINT}/api/secure-query`, {
       method: "POST",
@@ -176,7 +158,7 @@ async function callLambdaAPI(email, query, retry = true) {
       signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
-        Accept: "*/*", // IMPORTANT: allow file responses
+        Accept: "*/*",
         "X-CSRF-Token": csrfToken,
       },
       body: JSON.stringify({
@@ -188,27 +170,49 @@ async function callLambdaAPI(email, query, retry = true) {
     clearTimeout(timeout);
 
     if (!response.ok) {
-      const text = await response.text();
+      let errorMessage = `Server error (${response.status})`;
+      
+      try {
+        const contentType = response.headers.get("content-type") || "";
+        const text = await response.text().catch(() => "");
+        
+        if (text && text.trim()) {
+          if (contentType.includes("application/json")) {
+            try {
+              const errorData = JSON.parse(text);
+              errorMessage = errorData.message || errorData.error || errorData.detail || errorData.errorMessage || errorMessage;
+            } catch {
+              errorMessage = text.length > 200 ? text.substring(0, 200) + "..." : text;
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(text);
+              errorMessage = parsed.message || parsed.error || parsed.detail || parsed.errorMessage || text;
+            } catch {
+              errorMessage = text.length > 200 ? text.substring(0, 200) + "..." : text;
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error parsing error response:", e);
+      }
 
-      // 🔐 Retry ONLY once and ONLY for CSRF failures
-      if (response.status === 403 && retry && text.includes("CSRF")) {
+      if (response.status === 403 && retry && errorMessage.includes("CSRF")) {
         csrfToken = null;
         return callLambdaAPI(email, query, false);
       }
 
-      throw new Error(`API error ${response.status}: ${text}`);
+      const error = new Error(`API_ERROR_${response.status}: ${errorMessage}`);
+      error.status = response.status;
+      error.message = errorMessage;
+      throw error;
     }
 
-    // 🔍 Detect response type
     const contentType = response.headers.get("content-type") || "";
 
-    // ===============================
-    // 📄 FILE RESPONSE
-    // ===============================
     if (!contentType.includes("application/json")) {
       const blob = await response.blob();
 
-      // Try to extract filename
       let filename = "download";
       const disposition = response.headers.get("content-disposition");
 
@@ -231,23 +235,39 @@ async function callLambdaAPI(email, query, retry = true) {
       return "File downloaded successfully";
     }
 
-    // ===============================
-    // 📝 TEXT RESPONSE
-    // ===============================
     const data = await response.json();
 
     return data.final_output || data.response || data.message || "No response";
   } catch (error) {
-    if (error.name === "AbortError") {
-      throw new Error("Request timed out. Please try again.");
+    if (error.status) {
+      throw error;
     }
+    
+    if (error.name === "AbortError") {
+      const timeoutError = new Error("Request timed out after 30 minutes. The server may still be processing your request. Please try again or contact support.");
+      timeoutError.status = 0;
+      throw timeoutError;
+    }
+    
+    if (error.message.includes("CORS_ERROR") || error.message.includes("Security context")) {
+      throw error;
+    }
+    
+    if (error.name === "TypeError" && error.message.includes("Failed to fetch")) {
+      if (error.message.includes("timeout") || error.message.includes("network")) {
+        const networkError = new Error("Network timeout: The request took too long. This might be due to a slow connection or server processing time. Please try again.");
+        networkError.status = 0;
+        throw networkError;
+      }
+      const corsError = new Error("CORS_ERROR: The API server is blocking requests due to CORS policy. The backend needs to include 'Access-Control-Allow-Origin' header.");
+      corsError.status = 0;
+      throw corsError;
+    }
+    
     throw error;
   }
 }
 
-/**
- * Get bot response - main entry point
- */
 export async function getBotResponse(message, conversationHistory = []) {
   const email = getUserEmail();
 
@@ -255,7 +275,6 @@ export async function getBotResponse(message, conversationHistory = []) {
     throw new Error("Email not found. Please provide your email address.");
   }
 
-  // Use mock API or real API based on config
   if (CONFIG.USE_MOCK_API) {
     return await callMockAPI(email, message);
   } else {
@@ -263,7 +282,6 @@ export async function getBotResponse(message, conversationHistory = []) {
   }
 }
 
-// Excludes the last user message as it's sent separately
 export function getConversationHistory(messagesContainer) {
   const messageElements = Array.from(
     messagesContainer.querySelectorAll(
@@ -271,7 +289,6 @@ export function getConversationHistory(messagesContainer) {
     )
   );
 
-  // Find and remove last user message from array
   const lastUserIndex = messageElements.findLastIndex((msg) =>
     msg.classList.contains("user-message")
   );
