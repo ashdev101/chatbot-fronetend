@@ -101,6 +101,9 @@ let initPromise = null;
 let csrfToken = null;
 
 async function initSecurityContext() {
+  csrfToken = null
+  initPromise = null
+
   if (csrfToken) return;
 
   if (!initPromise) {

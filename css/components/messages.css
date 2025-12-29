@@ -37,6 +37,8 @@
   border-bottom-left-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-color);
+  overflow-x: auto;
+  max-width: 100%;
 }
 
 .message-content p {
@@ -205,6 +207,52 @@
   margin: var(--spacing-lg) 0;
 }
 
+.bot-message .message-content .table-container {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: var(--spacing-md) 0;
+  border-radius: var(--radius-md);
+  -webkit-overflow-scrolling: touch;
+}
+
+.bot-message .message-content table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: collapse;
+  font-size: var(--font-size-base);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: table;
+}
+
+.bot-message .message-content table thead {
+  background: var(--bg-tertiary);
+}
+
+.bot-message .message-content table th {
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.bot-message .message-content table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.bot-message .message-content table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.bot-message .message-content table tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
 @media (max-width: 480px) {
   .bot-message .message-content h1 {
     font-size: 1.3em;
@@ -226,5 +274,18 @@
   .bot-message .message-content pre {
     padding: var(--spacing-sm);
     font-size: 0.8em;
+  }
+
+  .bot-message .message-content .table-container {
+    margin: var(--spacing-sm) 0;
+  }
+
+  .bot-message .message-content table {
+    font-size: var(--font-size-sm);
+  }
+
+  .bot-message .message-content table th,
+  .bot-message .message-content table td {
+    padding: var(--spacing-xs) var(--spacing-sm);
   }
 }

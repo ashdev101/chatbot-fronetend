@@ -198,6 +198,147 @@ function processHorizontalRules(text) {
 }
 
 /**
+ * Processes markdown tables
+ * @param {string} text - Text containing markdown tables
+ * @returns {string} Text with tables converted to HTML <table> tags
+ */
+function processTables(text) {
+  const lines = text.split('\n');
+  const result = [];
+  let tableRows = [];
+  let inTable = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    
+    // Check if this is a table row (starts with |)
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      if (!inTable) {
+        inTable = true;
+        tableRows = [];
+      }
+      tableRows.push(line);
+    } else {
+      // End of table - process accumulated rows
+      if (inTable && tableRows.length > 0) {
+        result.push(convertTableToHtml(tableRows));
+        tableRows = [];
+        inTable = false;
+      }
+      result.push(line);
+    }
+  }
+
+  // Handle table at end of text
+  if (inTable && tableRows.length > 0) {
+    result.push(convertTableToHtml(tableRows));
+  }
+
+  return result.join('\n');
+}
+
+/**
+ * Processes inline markdown formatting in table cells
+ * @param {string} cell - Cell content to process
+ * @returns {string} Processed cell content with HTML
+ */
+function processTableCellContent(cell) {
+  // First escape HTML to prevent XSS
+  let processed = escapeHtml(cell);
+  
+  // Then process markdown formatting (patterns will match escaped text)
+  // Process links
+  processed = processed.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  // Process bold (**text**)
+  processed = processed.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  processed = processed.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  // Process italic (*text*)
+  processed = processed.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
+  processed = processed.replace(/_([^_\n]+?)_/g, '<em>$1</em>');
+  // Process inline code
+  processed = processed.replace(/`([^`]+)`/g, '<code>$1</code>');
+  
+  // Now unescape the HTML tags we added (but keep user content escaped)
+  processed = processed
+    .replace(/&lt;strong&gt;/g, '<strong>')
+    .replace(/&lt;\/strong&gt;/g, '</strong>')
+    .replace(/&lt;em&gt;/g, '<em>')
+    .replace(/&lt;\/em&gt;/g, '</em>')
+    .replace(/&lt;code&gt;/g, '<code>')
+    .replace(/&lt;\/code&gt;/g, '</code>')
+    .replace(/&lt;a\s+href="([^"]+)"\s+target="_blank"\s+rel="noopener noreferrer"&gt;/g, '<a href="$1" target="_blank" rel="noopener noreferrer">')
+    .replace(/&lt;\/a&gt;/g, '</a>');
+  
+  return processed;
+}
+
+/**
+ * Converts markdown table rows to HTML table
+ * @param {string[]} rows - Array of markdown table row strings
+ * @returns {string} HTML table string
+ */
+function convertTableToHtml(rows) {
+  if (rows.length < 2) {
+    return rows.join('\n'); // Not a valid table, return as-is
+  }
+
+  const parsedRows = rows.map(row => {
+    // Split by | and filter out empty strings at start/end
+    const cells = row.split('|').map(cell => cell.trim()).filter(cell => cell !== '');
+    return cells;
+  });
+
+  // Check if second row is a separator row (contains dashes)
+  const isSeparatorRow = (row) => {
+    return row.every(cell => /^:?-+:?$/.test(cell));
+  };
+
+  let headerRow = parsedRows[0];
+  let dataRows = [];
+
+  // Check if first data row is actually a separator
+  if (parsedRows.length > 1 && isSeparatorRow(parsedRows[1])) {
+    dataRows = parsedRows.slice(2);
+  } else {
+    dataRows = parsedRows.slice(1);
+  }
+
+  // Build HTML table
+  let html = '<table>';
+  
+  // Header row
+  if (headerRow.length > 0) {
+    html += '<thead><tr>';
+    headerRow.forEach(cell => {
+      const processedCell = processTableCellContent(cell);
+      html += `<th>${processedCell}</th>`;
+    });
+    html += '</tr></thead>';
+  }
+
+  // Data rows
+  if (dataRows.length > 0) {
+    html += '<tbody>';
+    dataRows.forEach(row => {
+      if (row.length > 0) {
+        html += '<tr>';
+        row.forEach(cell => {
+          const processedCell = processTableCellContent(cell);
+          html += `<td>${processedCell}</td>`;
+        });
+        html += '</tr>';
+      }
+    });
+    html += '</tbody>';
+  }
+
+  html += '</table>';
+  // Wrap table in a scrollable container
+  return `<div class="table-container">${html}</div>`;
+}
+
+/**
  * Processes line breaks (double newline becomes paragraph)
  * @param {string} text - Text to process
  * @returns {string} Text with paragraphs wrapped in <p> tags
@@ -209,7 +350,7 @@ function processParagraphs(text) {
     const trimmed = para.trim();
     if (!trimmed) return '';
     
-    if (trimmed.match(/^<(h[1-6]|ul|ol|pre|hr)/)) {
+    if (trimmed.match(/^<(h[1-6]|ul|ol|pre|hr|table|div\s+class="table-container")/)) {
       return trimmed;
     }
     
@@ -242,6 +383,7 @@ export function renderMarkdown(markdown) {
   html = processCodeBlocks(html);
   html = processHeaders(html);
   html = processHorizontalRules(html);
+  html = processTables(html);
   html = processOrderedLists(html);
   html = processUnorderedLists(html);
   html = processLinks(html);
