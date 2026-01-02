@@ -100,11 +100,8 @@ function getCookie(name) {
 let initPromise = null;
 let csrfToken = null;
 
-async function initSecurityContext() {
-  csrfToken = null
-  initPromise = null
-
-  if (csrfToken) return;
+async function initSecurityContext(force = false) {
+  if (!force && csrfToken) return;
 
   if (!initPromise) {
     initPromise = (async () => {
@@ -200,8 +197,9 @@ async function callLambdaAPI(email, query, retry = true) {
         console.error("Error parsing error response:", e);
       }
 
-      if (response.status === 403 && retry && errorMessage.includes("CSRF")) {
+      if (response.status === 403 && retry) {
         csrfToken = null;
+        await initSecurityContext(true);
         return callLambdaAPI(email, query, false);
       }
 
