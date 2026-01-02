@@ -1,4 +1,5 @@
 import { getCurrentTime } from "../utils/time.js";
+import { renderMarkdown } from "../utils/markdown.js";
 
 export class MessageRenderer {
   constructor(dom) {
@@ -12,9 +13,14 @@ export class MessageRenderer {
     const messageContent = document.createElement("div");
     messageContent.className = "message-content";
 
-    const messageText = document.createElement("p");
-    messageText.textContent = content;
-    messageContent.appendChild(messageText);
+    if (isUser) {
+      const messageText = document.createElement("p");
+      messageText.textContent = content;
+      messageContent.appendChild(messageText);
+    } else {
+      const renderedHtml = renderMarkdown(content);
+      messageContent.innerHTML = renderedHtml;
+    }
 
     const messageTime = document.createElement("span");
     messageTime.className = "message-time";
