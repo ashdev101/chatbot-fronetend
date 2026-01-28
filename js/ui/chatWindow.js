@@ -9,17 +9,18 @@ export class ChatWindow {
     this.dom.window.classList.add("active");
     this.dom.input.focus();
     this.hideNotification();
-    
+    this.hideTooltip();
+
     // Dispatch event for parent application
-    window.dispatchEvent(new CustomEvent('chatbotOpened'));
+    window.dispatchEvent(new CustomEvent("chatbotOpened"));
   }
 
   close() {
     this.isOpen = false;
     this.dom.window.classList.remove("active");
-    
+
     // Dispatch event for parent application
-    window.dispatchEvent(new CustomEvent('chatbotClosed'));
+    window.dispatchEvent(new CustomEvent("chatbotClosed"));
   }
 
   toggle() {
@@ -39,6 +40,14 @@ export class ChatWindow {
   hideNotification() {
     if (this.dom.notificationBadge) {
       this.dom.notificationBadge.style.display = "none";
+    }
+  }
+
+  hideTooltip() {
+    const tooltip = document.querySelector(".tooltip-text");
+    if (tooltip) {
+      tooltip.classList.remove("show-auto");
+      tooltip.style.display = "";
     }
   }
 
