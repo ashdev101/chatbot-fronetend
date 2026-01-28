@@ -12,6 +12,7 @@ class ChatbotApp {
     this.messageRenderer = null;
     this.storage = null;
     this.chat = null;
+    this.lastTooltipChange = 0; // Track last tooltip change time
   }
 
   init() {
@@ -27,20 +28,72 @@ class ChatbotApp {
       this.dom,
       this.messageRenderer,
       this.chatWindow,
-      this.storage
+      this.storage,
     );
 
     this.storage.clear(); // Clear only chat history on page refresh (keep email)
     this.setChatbotInfo();
     this.setupEventListeners();
     this.exportAPI();
-    
+
     // Initialize chat (show welcome/email prompt) when chat is first opened
     this.initializeChat();
-    
+
+    // Auto-show tooltip after 2 seconds
+    this.showTooltipAutomatically();
+
+    // Start random tooltip intervals
+    this.startRandomTooltips();
+
     // Dispatch ready event
-    window.dispatchEvent(new CustomEvent('chatbotReady'));
-    console.log('Chatbot initialized and ready');
+    window.dispatchEvent(new CustomEvent("chatbotReady"));
+    console.log("Chatbot initialized and ready");
+  }
+
+  showTooltipAutomatically() {
+    if (!CONFIG.TOOLTIP_ENABLED) return;
+
+    const tooltip = document.querySelector(".tooltip-text");
+    if (tooltip && !this.chatWindow.getIsOpen()) {
+      const messages = this.getRandomTooltipMessages();
+      const randomMessage =
+        messages[Math.floor(Math.random() * messages.length)];
+      tooltip.textContent = randomMessage;
+      this.lastTooltipChange = Date.now();
+
+      setTimeout(() => {
+        if (!this.chatWindow.getIsOpen()) {
+          tooltip.classList.add("show-auto");
+          setTimeout(() => {
+            tooltip.classList.remove("show-auto");
+          }, CONFIG.TOOLTIP_DISPLAY_DURATION);
+        }
+      }, 1500);
+    }
+  }
+
+  getRandomTooltipMessages() {
+    return CONFIG.TOOLTIP_MESSAGES;
+  }
+
+  startRandomTooltips() {
+    if (!CONFIG.TOOLTIP_ENABLED) return;
+
+    const showRandomTooltip = () => {
+      if (!this.chatWindow.getIsOpen()) {
+        this.showTooltipAutomatically();
+      }
+
+      // Schedule next tooltip between min and max interval
+      const range =
+        CONFIG.TOOLTIP_RANDOM_MAX_INTERVAL - CONFIG.TOOLTIP_RANDOM_MIN_INTERVAL;
+      const nextInterval =
+        CONFIG.TOOLTIP_RANDOM_MIN_INTERVAL + Math.random() * range;
+      setTimeout(showRandomTooltip, nextInterval);
+    };
+
+    // Start the cycle after minimum interval
+    setTimeout(showRandomTooltip, CONFIG.TOOLTIP_RANDOM_MIN_INTERVAL);
   }
 
   setChatbotInfo() {
@@ -59,7 +112,7 @@ class ChatbotApp {
   initializeChat() {
     // Track if chat has been initialized
     this.chatInitialized = false;
-    
+
     // Initialize chat when window is opened for the first time
     const originalOpen = this.chatWindow.open.bind(this.chatWindow);
     this.chatWindow.open = () => {
@@ -92,6 +145,38 @@ class ChatbotApp {
         this.chat.sendMessage(message);
       }
     });
+
+    // Close chat when clicking outside
+    document.addEventListener("click", (e) => {
+      const chatContainer = document.getElementById("chatbotContainer");
+      if (
+        this.chatWindow.getIsOpen() &&
+        chatContainer &&
+        !chatContainer.contains(e.target)
+      ) {
+        this.chatWindow.close();
+      }
+    });
+
+    // Change tooltip message on hover
+    if (CONFIG.TOOLTIP_ENABLED && CONFIG.TOOLTIP_SHOW_ON_HOVER) {
+      const tooltip = document.querySelector(".tooltip-text");
+      if (tooltip) {
+        this.dom.toggle.addEventListener("mouseenter", () => {
+          if (!this.chatWindow.getIsOpen()) {
+            const now = Date.now();
+            // Only change message if 5 seconds have passed
+            if (now - this.lastTooltipChange > 5000) {
+              const messages = this.getRandomTooltipMessages();
+              const randomMessage =
+                messages[Math.floor(Math.random() * messages.length)];
+              tooltip.textContent = randomMessage;
+              this.lastTooltipChange = now;
+            }
+          }
+        });
+      }
+    }
   }
 
   exportAPI() {
@@ -114,14 +199,14 @@ class ChatbotApp {
    * @returns {boolean} - True if email was saved successfully
    */
   setUserEmail(email) {
-    if (!email || typeof email !== 'string') {
-      console.error('Invalid email provided');
+    if (!email || typeof email !== "string") {
+      console.error("Invalid email provided");
       return false;
     }
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      console.error('Email cannot be empty');
+      console.error("Email cannot be empty");
       return false;
     }
 
@@ -130,7 +215,7 @@ class ChatbotApp {
       console.log(`✅ User email set: ${trimmedEmail}`);
       return true;
     } catch (e) {
-      console.error('Failed to save user email:', e);
+      console.error("Failed to save user email:", e);
       return false;
     }
   }
@@ -143,7 +228,7 @@ class ChatbotApp {
     try {
       return localStorage.getItem(CONFIG.EMAIL_STORAGE_KEY);
     } catch (e) {
-      console.error('Failed to get user email:', e);
+      console.error("Failed to get user email:", e);
       return null;
     }
   }
